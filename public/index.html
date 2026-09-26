@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NFC-IET | Multi-Portal Attendance Management System</title>
+  <meta name="description" content="Official NFC Institute of Engineering and Technology (NFC-IET) Multi-Portal QR-Based Attendance Management System for Students, Teachers, and Administration.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" type="image/svg+xml" href="assets/nfc-iet-logo.svg">
+  <!-- HTML5-QRCode Scanner Library -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+  <!-- Top Demo Switcher Toolbar -->
+  <aside class="demo-toolbar" aria-label="Demo Role Switcher">
+    <div class="demo-label">
+      <span>⚡ Quick Demo Switcher:</span>
+    </div>
+    <div class="demo-pill-group">
+      <button class="demo-pill" data-username="admin" title="Log in as Registrar / Admin">🛡️ Admin (Registrar)</button>
+      <button class="demo-pill" data-username="dr.imran" title="Log in as Dr. Imran Khan">👨‍🏫 Dr. Imran (AI / ML)</button>
+      <button class="demo-pill" data-username="engr.ayesha" title="Log in as Engr. Ayesha Malik">👩‍🏫 Engr. Ayesha (DB / Web)</button>
+      <button class="demo-pill" data-username="325-B" title="Log in as Muhammad Hamza (Section B)">🎓 Student: 325-B (Hamza)</button>
+      <button class="demo-pill" data-username="326-B" title="Log in as Fatima Noor (Section B)">🎓 Student: 326-B (Fatima)</button>
+      <button class="demo-pill" data-username="327-B" title="Log in as Zainab Bibi (Section B)">🎓 Student: 327-B (Zainab)</button>
+    </div>
+  </aside>
+
+  <!-- Institutional Header -->
+  <header class="main-header">
+    <div class="header-container">
+      <div class="branding-group">
+        <img src="assets/nfc-iet-logo.svg" alt="NFC-IET Official Crest" class="nfc-logo-img">
+        <div class="institution-title">
+          <h1>NFC INSTITUTE OF ENGINEERING &amp; TECHNOLOGY</h1>
+          <p>Multi-Portal QR Attendance Management System</p>
+        </div>
+      </div>
+
+      <div class="user-profile-badge" id="user-profile-badge" style="display: none;">
+        <div class="user-info-text">
+          <span class="user-info-name" id="header-user-name">User Name</span>
+          <span class="user-info-role" id="header-user-role">Student (325-B)</span>
+        </div>
+        <button class="btn-logout" id="btn-logout" title="Sign Out">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Portal Navigation Bar (Visible when logged in) -->
+  <nav class="portal-nav" id="portal-nav" style="display: none;" aria-label="Portal Navigation">
+    <div class="nav-container">
+      <div class="nav-tabs">
+        <button class="nav-tab-btn" data-portal="student">
+          <span>🎓 Student Portal</span>
+        </button>
+        <button class="nav-tab-btn" data-portal="teacher">
+          <span>👨‍🏫 Teacher Portal</span>
+        </button>
+        <button class="nav-tab-btn" data-portal="admin">
+          <span>🛡️ Administration Portal</span>
+        </button>
+      </div>
+      <div>
+        <span class="portal-tag-badge portal-tag-student" id="portal-status-indicator">Active Portal</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="main-content">
+
+    <!-- ==========================================================================
+         LOGIN VIEW
+         ========================================================================== -->
+    <div id="login-wrapper" class="login-wrapper">
+      <div class="login-header-banner">
+        <img src="assets/nfc-iet-logo.svg" alt="NFC-IET Crest" class="nfc-logo-img">
+        <h2>NFC-IET Portal Sign In</h2>
+        <p>Institute of Engineering &amp; Technology, Multan</p>
+      </div>
+
+      <div class="login-form-body">
+        <div class="portal-selector-tabs">
+          <button type="button" class="portal-select-btn active" data-portal="student">Student</button>
+          <button type="button" class="portal-select-btn" data-portal="teacher">Teacher</button>
+          <button type="button" class="portal-select-btn" data-portal="admin">Admin</button>
+        </div>
+
+        <form id="login-form">
+          <input type="hidden" id="login-selected-portal" value="student">
+
+          <div class="form-group">
+            <label for="login-username" class="form-label">Student ID / Roll No / Username</label>
+            <input type="text" id="login-username" class="form-control" placeholder="e.g. 325-B, dr.imran, admin" value="325-B" required autocomplete="username">
+          </div>
+
+          <div class="form-group">
+            <label for="login-password" class="form-label">Account Password</label>
+            <input type="password" id="login-password" class="form-control" placeholder="••••••••" value="password123" required autocomplete="current-password">
+          </div>
+
+          <button type="submit" class="btn-primary" style="margin-top: 12px;">
+            <span>Secure Portal Sign In</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
+        </form>
+
+        <div class="quick-hint-box" id="login-credential-hints">
+          💡 <strong>Student Login:</strong> Use Roll No / Username <code>325-B</code>, <code>326-B</code>, or <code>327-B</code> (Password: <code>password123</code>)
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         PORTAL 1: STUDENT PORTAL VIEW
+         ========================================================================== -->
+    <div id="view-student-portal" class="portal-view view-section">
+      <!-- Student Hero Banner -->
+      <div class="student-hero-banner">
+        <div class="student-hero-info">
+          <h2>Student Attendance Dashboard</h2>
+          <p>NFC Institute of Engineering and Technology • Department of Computer Science</p>
+        </div>
+        <div class="hero-stats-row">
+          <div class="stat-chip">
+            <span class="stat-chip-val" id="student-overall-pct">92.4%</span>
+            <span class="stat-chip-label">Overall Attendance</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-chip-val" id="student-today-stat">0 / 5</span>
+            <span class="stat-chip-label">Today's Lectures</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-chip-val" id="student-total-attended">-- / --</span>
+            <span class="stat-chip-label">Total Attended</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Defaulter Warning Banner (Dynamic) -->
+      <div id="student-defaulter-alert" class="panel-card mb-16" style="display: none; background: #FEF2F2; border-color: #FECACA; color: #991B1B;">
+      </div>
+
+      <!-- QR Scanner Launch Card -->
+      <div class="scan-cta-card">
+        <div class="scan-cta-content">
+          <h3>📷 Mark Lecture Attendance</h3>
+          <p>Scan your teacher's live classroom QR code to instantly record your attendance.</p>
+        </div>
+        <button class="btn-scan-trigger" id="btn-open-scanner">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>Open Camera Scanner</span>
+        </button>
+      </div>
+
+      <!-- Daily 5-Lecture View -->
+      <div class="section-heading-bar">
+        <h3 class="section-title">
+          <span>📅 Today's Daily Schedule (5 Lectures)</span>
+        </h3>
+        <div style="font-size: 0.88rem; color: var(--text-secondary);">
+          <span id="student-schedule-day">Loading day...</span> • <span id="student-schedule-section">Section B</span>
+        </div>
+      </div>
+
+      <!-- 5-Cards Grid -->
+      <div class="lecture-cards-grid" id="student-lecture-grid">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Subject-wise Attendance Breakdown -->
+      <div class="panel-card mb-16">
+        <h3 class="section-title mb-16">📊 Subject-wise Attendance &amp; Eligibility Breakdown</h3>
+        <div class="attendance-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Subject</th>
+                <th>Conducted</th>
+                <th>Attended</th>
+                <th>Absent</th>
+                <th>Attendance Percentage</th>
+                <th>Eligibility Status</th>
+              </tr>
+            </thead>
+            <tbody id="student-subject-table-body">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Attendance Records Log -->
+      <div class="panel-card">
+        <h3 class="section-title mb-16">📜 Recent Attendance Activity Log</h3>
+        <div class="attendance-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Subject</th>
+                <th>Lecture Slot</th>
+                <th>Status</th>
+                <th>Timestamp</th>
+                <th>Method</th>
+              </tr>
+            </thead>
+            <tbody id="student-log-table-body">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         PORTAL 2: TEACHER PORTAL VIEW
+         ========================================================================== -->
+    <div id="view-teacher-portal" class="portal-view view-section">
+      <div class="section-heading-bar">
+        <div>
+          <h2 style="font-size: 1.45rem; font-weight: 800;">👨‍🏫 Teacher Lecture &amp; Attendance Hub</h2>
+          <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 2px;">Generate dynamic time-limited QR codes, monitor live student scans in real-time, and manage lecture records.</p>
+        </div>
+      </div>
+
+      <div class="teacher-grid-layout">
+        <!-- Left Panel: QR Generator Control -->
+        <div class="panel-card">
+          <h3 class="section-title" style="font-size: 1.15rem; margin-bottom: 16px;">
+            <span>⚡ Generate Attendance QR</span>
+          </h3>
+
+          <div class="form-group">
+            <label for="teacher-class-select" class="form-label">Assigned Subject &amp; Section</label>
+            <select id="teacher-class-select" class="form-control">
+              <option value="">-- Loading classes --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="teacher-slot-select" class="form-label">Lecture Slot</label>
+            <select id="teacher-slot-select" class="form-control">
+              <option value="">-- Loading slots --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="teacher-duration-select" class="form-label">QR Validity Duration</label>
+            <select id="teacher-duration-select" class="form-control">
+              <option value="5">5 Minutes (Standard Fast Scan)</option>
+              <option value="10" selected>10 Minutes (Recommended)</option>
+              <option value="15">15 Minutes</option>
+              <option value="30">30 Minutes (Extended Lab)</option>
+            </select>
+          </div>
+
+          <button id="btn-generate-qr" class="btn-primary" style="margin-top: 10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>Generate Live QR Code</span>
+          </button>
+
+          <!-- No Session State -->
+          <div id="teacher-no-session-view" class="qr-preview-box" style="margin-top: 20px;">
+            <div style="font-size: 2.5rem; margin-bottom: 8px;">📲</div>
+            <p style="font-weight: 700; color: var(--text-primary);">No Active QR Session</p>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Select a lecture slot and click "Generate Live QR Code" to begin taking attendance.</p>
+          </div>
+
+          <!-- Active Session Display -->
+          <div id="teacher-active-session-view" style="display: none; margin-top: 20px;">
+            <div style="background: var(--primary-soft); padding: 12px; border-radius: var(--radius-md); text-align: center; border: 1px solid var(--primary-glow);">
+              <span class="live-badge-pulse"><span class="pulse-dot"></span> LIVE QR SESSION</span>
+              <h4 id="live-session-title" style="font-size: 1rem; margin-top: 6px;">Subject Name</h4>
+              <p id="live-session-slot" style="font-size: 0.78rem; color: var(--text-secondary);">Slot Info</p>
+            </div>
+
+            <div class="qr-preview-box" style="margin: 14px 0;">
+              <img id="teacher-qr-image" src="" alt="Live Attendance QR" class="qr-code-image">
+              <div class="countdown-timer-wrap">
+                <span>⏳ Time Remaining:</span>
+                <span id="qr-countdown-timer">10:00</span>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+              <button id="btn-fullscreen-qr" class="btn-secondary" style="flex: 1; justify-content: center;">
+                <span>🖥️ Projector Mode</span>
+              </button>
+              <button id="btn-close-qr-session" class="btn-secondary" style="color: var(--danger); justify-content: center;">
+                <span>Stop Session</span>
+              </button>
+            </div>
+
+            <div style="font-size: 0.75rem; color: var(--text-muted); background: #F1F5F9; padding: 8px; border-radius: 6px; word-break: break-all;">
+              <strong>Session Token:</strong> <span id="current-session-token-hint">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Panel: Real-Time Live Attendance Sheet -->
+        <div class="panel-card">
+          <div class="flex-between flex-wrap" style="gap: 12px; border-bottom: 1px solid var(--border-light); padding-bottom: 14px;">
+            <div>
+              <h3 class="section-title" style="font-size: 1.2rem;">
+                <span>📋 Live Attendance Roster</span>
+                <span class="live-badge-pulse" style="font-size: 0.7rem;"><span class="pulse-dot"></span> Real-Time Sync</span>
+              </h3>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">Updates instantly as students scan with their mobile devices.</p>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div class="stat-chip" style="background: #F8FAFC; border: 1px solid var(--border-light); color: var(--text-primary); padding: 6px 14px;">
+                <span class="stat-chip-val" style="font-size: 1.1rem; color: var(--primary-maroon);">
+                  <span id="live-count-present">0</span> / <span id="live-count-total">0</span>
+                </span>
+                <span class="stat-chip-label" style="color: var(--text-secondary);" id="live-count-pct">0% Present</span>
+              </div>
+
+              <button id="btn-export-session-csv" class="btn-success">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Export CSV</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="attendance-table-container" style="max-height: 480px; overflow-y: auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Roll Number</th>
+                  <th>Student Name</th>
+                  <th>Status</th>
+                  <th>Scan Time</th>
+                  <th>Method</th>
+                  <th>Manual Override</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-live-roster-body">
+                <tr>
+                  <td colspan="6" class="text-center" style="padding: 24px; color: var(--text-muted);">
+                    Generate a QR session or select a lecture to view live attendance roster.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Defaulters Analytics Accordion -->
+          <div style="margin-top: 24px; border-top: 1px solid var(--border-light); padding-top: 16px;">
+            <h4 style="font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; justify-content: space-between;">
+              <span>⚠️ Class Defaulters List (&lt;75% Attendance)</span>
+              <span class="status-tag absent" id="teacher-defaulter-count">0</span>
+            </h4>
+            <div class="attendance-table-container mt-12">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Roll Number</th>
+                    <th>Student Name</th>
+                    <th>Section</th>
+                    <th>Subject</th>
+                    <th>Attendance %</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="teacher-defaulters-table-body">
+                  <!-- Dynamically rendered -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         PORTAL 3: ADMINISTRATION PORTAL VIEW
+         ========================================================================== -->
+    <div id="view-admin-portal" class="portal-view view-section">
+      <div class="section-heading-bar">
+        <div>
+          <h2 style="font-size: 1.45rem; font-weight: 800;">🛡️ Institution Administration Portal</h2>
+          <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 2px;">NFC-IET System Oversight, Teacher &amp; Student Management, Timetable Scheduling, and Security Audit Logs.</p>
+        </div>
+        <div>
+          <button id="btn-reset-system" class="btn-secondary" style="color: var(--danger); font-size: 0.8rem;">
+            <span>🔄 Restore Demo Seeds</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Institutional Overview KPI Cards -->
+      <div class="admin-stats-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap" style="background: #E0E7FF; color: #4338CA;">👥</div>
+          <div>
+            <div class="kpi-val" id="admin-total-students">--</div>
+            <div class="kpi-lbl">Total Students</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap" style="background: #FEF3C7; color: #B45309;">👨‍🏫</div>
+          <div>
+            <div class="kpi-val" id="admin-total-teachers">--</div>
+            <div class="kpi-lbl">Faculty Members</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap" style="background: #DCFCE7; color: #15803D;">📚</div>
+          <div>
+            <div class="kpi-val" id="admin-total-subjects">--</div>
+            <div class="kpi-lbl">Active Subjects</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap" style="background: #FEE2E2; color: #B91C1C;">📲</div>
+          <div>
+            <div class="kpi-val" id="admin-today-scans">--</div>
+            <div class="kpi-lbl">Today's Total Scans</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap" style="background: #EDE9FE; color: #6D28D9;">🔴</div>
+          <div>
+            <div class="kpi-val" id="admin-active-sessions">--</div>
+            <div class="kpi-lbl">Live QR Sessions</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Management Tabs -->
+      <div class="admin-tab-bar">
+        <button class="admin-subtab-btn active" data-subtab="teachers">👨‍🏫 Teacher Management</button>
+        <button class="admin-subtab-btn" data-subtab="students">🎓 Student Management &amp; Bulk Import</button>
+        <button class="admin-subtab-btn" data-subtab="timetable">📅 Timetable &amp; Schedule</button>
+        <button class="admin-subtab-btn" data-subtab="audit">🔒 Security Audit Logs</button>
+      </div>
+
+      <!-- Subtab 1: Teacher Management -->
+      <div id="admin-panel-teachers" class="admin-subtab-panel panel-card">
+        <div class="flex-between mb-16 flex-wrap" style="gap: 10px;">
+          <div>
+            <h3 class="section-title" style="font-size: 1.15rem;">Faculty Accounts &amp; Subject Assignments</h3>
+            <p style="font-size: 0.8rem; color: var(--text-secondary);">Manage institutional faculty credentials and course allocations.</p>
+          </div>
+          <button id="btn-open-add-teacher" class="btn-primary" style="width: auto;">
+            <span>+ Add New Teacher</span>
+          </button>
+        </div>
+
+        <div class="attendance-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Teacher Name</th>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Department</th>
+                <th>Allocated Subjects &amp; Sections</th>
+                <th>Account Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="admin-teachers-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Subtab 2: Student Management -->
+      <div id="admin-panel-students" class="admin-subtab-panel panel-card" style="display: none;">
+        <div class="flex-between mb-16 flex-wrap" style="gap: 10px;">
+          <div>
+            <h3 class="section-title" style="font-size: 1.15rem;">Student Enrollment Roster</h3>
+            <p style="font-size: 0.8rem; color: var(--text-secondary);">Manage student roll numbers, section allocations, or import batches via CSV.</p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-open-bulk-import" class="btn-success">
+              <span>📥 Bulk CSV Import</span>
+            </button>
+            <button id="btn-open-add-student" class="btn-primary" style="width: auto;">
+              <span>+ Add Student</span>
+            </button>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+          <input type="text" id="admin-student-search" class="form-control" style="max-width: 280px;" placeholder="🔍 Search name or roll number...">
+          <select id="admin-student-section-filter" class="form-control" style="max-width: 200px;">
+            <option value="">All Sections</option>
+            <option value="1">Section B (2022-2026)</option>
+            <option value="2">Section A (2022-2026)</option>
+          </select>
+        </div>
+
+        <div class="attendance-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Roll Number</th>
+                <th>Student Name</th>
+                <th>Username</th>
+                <th>Section</th>
+                <th>Email</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="admin-students-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Subtab 3: Timetable Matrix -->
+      <div id="admin-panel-timetable" class="admin-subtab-panel panel-card" style="display: none;">
+        <div class="flex-between mb-16">
+          <div>
+            <h3 class="section-title" style="font-size: 1.15rem;">5-Lecture Daily Schedule &amp; Timetable Matrix</h3>
+            <p style="font-size: 0.8rem; color: var(--text-secondary);">Weekly timetable structure for Section B &amp; Section A.</p>
+          </div>
+        </div>
+
+        <div class="attendance-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Day</th>
+                <th>Lecture Slot</th>
+                <th>Subject</th>
+                <th>Instructor</th>
+                <th>Section</th>
+                <th>Room / Venue</th>
+              </tr>
+            </thead>
+            <tbody id="admin-timetable-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Subtab 4: Security Audit Logs -->
+      <div id="admin-panel-audit" class="admin-subtab-panel panel-card" style="display: none;">
+        <div class="flex-between mb-16">
+          <div>
+            <h3 class="section-title" style="font-size: 1.15rem;">Institutional Security &amp; Activity Audit Log</h3>
+            <p style="font-size: 0.8rem; color: var(--text-secondary);">Real-time verifiable audit trail of logins, QR sessions, scans, and manual overrides.</p>
+          </div>
+        </div>
+
+        <div class="attendance-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>User</th>
+                <th>Action</th>
+                <th>Details</th>
+                <th>IP Address</th>
+              </tr>
+            </thead>
+            <tbody id="admin-audit-logs-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ==========================================================================
+       MODAL 1: CAMERA QR SCANNER MODAL (STUDENT)
+       ========================================================================== -->
+  <div id="scanner-modal" class="modal-backdrop">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3>📷 NFC-IET QR Attendance Scanner</h3>
+        <button id="btn-close-scanner" class="btn-close-modal" aria-label="Close Scanner">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="scanner-container">
+          <div id="qr-reader-video"></div>
+          <div class="scanner-viewfinder">
+            <div class="scanner-laser"></div>
+          </div>
+        </div>
+
+        <div id="scanner-status-msg" class="scanner-status-msg"></div>
+
+        <div style="margin-top: 16px; border-top: 1px dashed var(--border-light); padding-top: 14px;">
+          <label class="form-label" style="font-size: 0.8rem;">⚡ Desktop / Testing Simulated QR Scanner</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="simulated-token-input" class="form-control" style="font-size: 0.85rem;" placeholder="Paste session token or leave empty to auto-scan live session">
+            <button id="btn-test-simulated-scan" class="btn-secondary" style="white-space: nowrap; font-size: 0.85rem;">
+              <span>Simulate Scan</span>
+            </button>
+          </div>
+          <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">Click "Simulate Scan" to mark attendance immediately without camera permissions.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL 2: FULLSCREEN CLASSROOM QR PRESENTATION (TEACHER)
+       ========================================================================== -->
+  <div id="fullscreen-qr-overlay" class="fullscreen-qr-overlay">
+    <div style="position: absolute; top: 20px; right: 24px;">
+      <button id="btn-close-fullscreen" class="btn-secondary" style="background: rgba(255,255,255,0.2); color:#FFF; border:none; padding:8px 16px; font-size:1rem;">
+        ✕ Exit Presentation Mode
+      </button>
+    </div>
+
+    <div class="fullscreen-qr-box">
+      <h2 style="font-size: 1.4rem; color: var(--primary-maroon); font-weight: 800; margin-bottom: 4px;" id="fullscreen-sub-title">Artificial Intelligence - CS-301</h2>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">Scan with your student portal to mark attendance</p>
+      
+      <img id="fullscreen-qr-img" src="" alt="Classroom QR Code">
+
+      <div style="margin-top: 16px; text-align: center;">
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 2rem; font-weight: 800; color: var(--primary-maroon);" id="fullscreen-countdown-timer">10:00</div>
+        <p style="font-size: 0.95rem; font-weight: 700; color: #10B981; margin-top: 4px;" id="fullscreen-live-count">0 Present</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL 3: ADD TEACHER (ADMIN)
+       ========================================================================== -->
+  <div id="modal-add-teacher" class="modal-backdrop">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3>+ Create Teacher Account</h3>
+        <button class="btn-close-modal" aria-label="Close Modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Teacher Full Name</label>
+          <input type="text" id="new-teacher-name" class="form-control" placeholder="e.g. Dr. Tariq Mahmood">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Username (for Login)</label>
+          <input type="text" id="new-teacher-username" class="form-control" placeholder="e.g. dr.tariq">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="new-teacher-email" class="form-control" placeholder="e.g. tariq@nfciet.edu.pk">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Initial Password</label>
+          <input type="password" id="new-teacher-password" class="form-control" value="password123">
+        </div>
+        <button id="btn-save-teacher" class="btn-primary" style="margin-top: 10px;">Create Teacher Account</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL 4: ADD SINGLE STUDENT (ADMIN)
+       ========================================================================== -->
+  <div id="modal-add-student" class="modal-backdrop">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3>+ Add Single Student</h3>
+        <button class="btn-close-modal" aria-label="Close Modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Student Roll Number</label>
+          <input type="text" id="new-student-roll" class="form-control" placeholder="e.g. 22-CS-340">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Student Full Name</label>
+          <input type="text" id="new-student-name" class="form-control" placeholder="e.g. Daniyal Khan">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Username (Default: Roll Number)</label>
+          <input type="text" id="new-student-username" class="form-control" placeholder="e.g. 340-B">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Assigned Section</label>
+          <select id="new-student-section" class="form-control">
+            <option value="1">Section B (2022-2026)</option>
+            <option value="2">Section A (2022-2026)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Student Email</label>
+          <input type="email" id="new-student-email" class="form-control" placeholder="e.g. daniyal@nfciet.edu.pk">
+        </div>
+        <button id="btn-save-student" class="btn-primary" style="margin-top: 10px;">Save Student Record</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL 5: BULK CSV IMPORT (ADMIN)
+       ========================================================================== -->
+  <div id="modal-bulk-import" class="modal-backdrop">
+    <div class="modal-window" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3>📥 Bulk CSV Student Import</h3>
+        <button class="btn-close-modal" aria-label="Close Modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Target Section</label>
+          <select id="bulk-target-section" class="form-control">
+            <option value="1">Section B (2022-2026)</option>
+            <option value="2">Section A (2022-2026)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Paste CSV Data (Format: Roll Number, Name, Email, Username)</label>
+          <textarea id="bulk-csv-textarea" class="form-control" rows="8" style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem;" placeholder="22-CS-341, Ali Raza, ali@nfciet.edu.pk, 341-B&#10;22-CS-342, Sara Khan, sara@nfciet.edu.pk, 342-B&#10;22-CS-343, Farhan Qureshi, farhan@nfciet.edu.pk, 343-B"></textarea>
+        </div>
+
+        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 12px;">
+          * Default password for imported students will be <code>password123</code>.
+        </div>
+
+        <button id="btn-run-bulk-import" class="btn-primary">Execute Bulk Student Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/utils.js"></script>
+  <script src="js/student.js"></script>
+  <script src="js/teacher.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
