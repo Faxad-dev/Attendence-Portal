@@ -1,8 +1,9 @@
-const Database = require('better-sqlite3');
-const path = require('path');
-const bcrypt = require('bcryptjs');
-
-const fs = require('fs');
+let Database;
+try {
+  Database = require('better-sqlite3');
+} catch (e) {
+  console.warn('better-sqlite3 load warning:', e.message);
+}
 
 // Support Vercel serverless environment (/tmp writeable path)
 let dbPath = path.join(__dirname, 'attendance.db');
@@ -18,11 +19,17 @@ if (process.env.VERCEL) {
   dbPath = tmpDbPath;
 }
 
-const db = new Database(dbPath);
-
-// Enable foreign keys and WAL mode for high concurrency
-db.pragma('foreign_keys = ON');
-db.pragma('journal_mode = WAL');
+let db;
+if (Database) {
+  try {
+    db = new Database(dbPath);
+    db.pragma('foreign_keys = ON');
+    db.pragma('journal_mode = WAL');
+  } catch (err) {
+    console.warn('Could not open SQLite file with WAL, opening standard mode:', err.message);
+    db = new Database(':memory:');
+  }
+}
 
 function initDatabase() {
   console.log('Initializing NFC-IET Attendance Database...');
