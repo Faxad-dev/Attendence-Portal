@@ -286,33 +286,29 @@ const StudentPortal = {
 
   // Simulated Scan for instant test testing
   async performSimulatedScan() {
-    const inputToken = document.getElementById('simulated-token-input').value.trim();
-    if (inputToken) {
-      await this.handleQrScanned(inputToken);
-      return;
-    }
+    let inputToken = document.getElementById('simulated-token-input').value.trim();
 
-    // Try finding an active session token automatically for the student
-    try {
-      const res = await App.fetchApi('/api/student/daily-schedule');
-      const data = await res.json();
-      const liveLecture = data.lectures.find(l => l.is_live_qr);
+    if (!inputToken) {
+      // Auto-detect active session from server for student's section
+      try {
+        const res = await App.fetchApi('/api/student/active-session');
+        const data = await res.json();
 
-      if (liveLecture) {
-        // We will call the scan API directly with the today's date format
-        Utils.showToast('Connecting to live lecture QR session...', 'info');
+        if (data.session && data.session.session_token) {
+          inputToken = data.session.session_token;
+          document.getElementById('simulated-token-input').value = inputToken;
+          Utils.showToast(`Found active lecture: ${data.session.subject_name}. Scanning now...`, 'info');
+        } else {
+          Utils.playErrorBuzz();
+          Utils.showToast('No active QR session found. Please generate one from the Teacher Portal first (e.g., Dr. Imran), or paste a token.', 'warning');
+          return;
+        }
+      } catch (e) {
+        Utils.showToast('Error checking for active QR sessions.', 'error');
+        return;
       }
-
-      // If user didn't enter a token, let's notify them
-      Utils.showToast('Generating simulated scan from active lecture...', 'info');
-      // Fetch teacher's active session or submit demo token
-      const sessionRes = await fetch('/api/auth/demo-accounts');
-      // If there is any active session token in the system, let's grab it or prompt
-      const tokenToUse = inputToken || `NFC-DEMO-TOKEN-${Date.now()}`;
-      await this.handleQrScanned(tokenToUse);
-
-    } catch (e) {
-      Utils.showToast('Please enter or paste a valid QR token to simulate.', 'warning');
     }
+
+    await this.handleQrScanned(inputToken);
   }
 };
