@@ -1233,3 +1233,34 @@ body {
     justify-content: center;
   }
 }
+
+/* Firebase Cloud Status Badge */
+.firebase-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
+  transition: all 0.2s ease;
+}
+
+.firebase-badge.connected {
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FCD34D;
+}
+
+.firebase-badge.offline {
+  background: #F1F5F9;
+  color: #64748B;
+  border: 1px solid #CBD5E1;
+}
+
+#btn-google-firebase:hover {
+  background: #F8FAFC !important;
+  border-color: #94A3B8 !important;
+}
+

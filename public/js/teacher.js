@@ -166,6 +166,11 @@ const TeacherPortal = {
 
     // Initial load of attendance sheet roster
     this.loadLiveRoster(session.id);
+
+    // Backup session state to Firebase Firestore
+    if (window.FirebaseService && window.FirebaseService.syncSessionToFirestore) {
+      window.FirebaseService.syncSessionToFirestore(session);
+    }
   },
 
   // 4. Countdown Timer Engine

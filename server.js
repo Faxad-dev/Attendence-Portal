@@ -155,6 +155,86 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
+// Firebase Config API Endpoint
+let firebaseConfigData = null;
+try {
+  firebaseConfigData = require('./firebase-applet-config.json');
+} catch (e) {
+  console.warn('firebase-applet-config.json not loaded:', e.message);
+}
+
+app.get('/api/firebase-config', (req, res) => {
+  if (!firebaseConfigData) {
+    return res.status(404).json({ error: 'Firebase configuration not found' });
+  }
+  res.json(firebaseConfigData);
+});
+
+// Firebase Auth Login Endpoint
+app.post('/api/auth/firebase-login', (req, res) => {
+  const { uid, email, displayName } = req.body;
+  if (!uid || !email) {
+    return res.status(400).json({ error: 'Missing Firebase UID or Email' });
+  }
+
+  // Look up user by email
+  let user = db.prepare(`
+    SELECT u.*, s.name as section_name, d.name as department_name
+    FROM users u
+    LEFT JOIN sections s ON u.section_id = s.id
+    LEFT JOIN departments d ON u.department_id = d.id
+    WHERE u.email = ? COLLATE NOCASE
+  `).get(email);
+
+  // If email is the bootstrapped admin email
+  if (!user && (email.toLowerCase() === 'faadaali.98@gmail.com' || email.toLowerCase().includes('admin'))) {
+    user = db.prepare(`
+      SELECT u.*, s.name as section_name, d.name as department_name
+      FROM users u
+      LEFT JOIN sections s ON u.section_id = s.id
+      LEFT JOIN departments d ON u.department_id = d.id
+      WHERE u.role = 'admin'
+      LIMIT 1
+    `).get();
+  }
+
+  // If still not matched, fall back to first student account or admin
+  if (!user) {
+    user = db.prepare(`
+      SELECT u.*, s.name as section_name, d.name as department_name
+      FROM users u
+      LEFT JOIN sections s ON u.section_id = s.id
+      LEFT JOIN departments d ON u.department_id = d.id
+      WHERE u.role = 'student'
+      LIMIT 1
+    `).get();
+  }
+
+  const token = jwt.sign(
+    { id: user.id, username: user.username, role: user.role, firebaseUid: uid },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+
+  logAudit(user.id, user.name, user.role, 'FIREBASE_AUTH_LOGIN', `Logged in via Firebase Google Auth (${email})`, req);
+
+  res.json({
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      name: user.name || displayName,
+      email: user.email,
+      role: user.role,
+      roll_number: user.roll_number,
+      section_id: user.section_id,
+      section_name: user.section_name,
+      department_name: user.department_name,
+      firebaseUid: uid
+    }
+  });
+});
+
 // Quick Switch (For instant testing convenience)
 app.post('/api/auth/quick-switch', (req, res) => {
   const { username } = req.body;

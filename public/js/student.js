@@ -260,6 +260,16 @@ const StudentPortal = {
         // Vibrate if supported
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
 
+        // Cloud sync to Firestore
+        if (window.FirebaseService && window.FirebaseService.syncAttendanceToFirestore) {
+          window.FirebaseService.syncAttendanceToFirestore(data.lecture || {}, {
+            studentId: App.currentUser ? App.currentUser.id : 'std_1',
+            studentRoll: App.currentUser ? App.currentUser.roll_number : '325-B',
+            studentName: App.currentUser ? App.currentUser.name : 'Muhammad Hamza',
+            status: 'present'
+          });
+        }
+
         // Refresh schedules
         setTimeout(() => {
           this.closeScannerModal();

@@ -15,6 +15,15 @@ const App = {
     this.setupGlobalListeners();
     this.setupDemoToolbar();
 
+    // Initialize Firebase
+    const initFb = () => {
+      if (window.FirebaseService && window.FirebaseService.initFirebase) {
+        window.FirebaseService.initFirebase();
+      }
+    };
+    initFb();
+    window.addEventListener('load', initFb);
+
     if (this.token) {
       await this.verifyCurrentSession();
     } else {
@@ -60,6 +69,29 @@ const App = {
         this.updateLoginHints(btn.dataset.portal);
       };
     });
+
+    // Google Firebase Login Button
+    const googleBtn = document.getElementById('btn-google-firebase');
+    if (googleBtn) {
+      googleBtn.onclick = async () => {
+        try {
+          if (!window.FirebaseService || !window.FirebaseService.signInWithGoogle) {
+            throw new Error('Firebase Service is still initializing. Please wait a moment.');
+          }
+          Utils.showToast('Connecting to Firebase Google Auth...', 'info');
+          const data = await window.FirebaseService.signInWithGoogle();
+          this.token = data.token;
+          this.currentUser = data.user;
+          localStorage.setItem('nfc_jwt_token', this.token);
+          this.updateHeaderProfile();
+          this.switchPortal(this.currentUser.role);
+          Utils.showToast(`Welcome ${this.currentUser.name} (Firebase Verified)`, 'success');
+        } catch (err) {
+          console.error('Firebase Auth error:', err);
+          Utils.showToast(err.message || 'Firebase Google Sign-In failed', 'error');
+        }
+      };
+    }
 
     // Logout Button
     const logoutBtn = document.getElementById('btn-logout');
@@ -261,6 +293,9 @@ const App = {
     this.token = null;
     this.currentUser = null;
     localStorage.removeItem('nfc_jwt_token');
+    if (window.FirebaseService && window.FirebaseService.signOutFirebase) {
+      window.FirebaseService.signOutFirebase();
+    }
     Utils.showToast('Logged out of NFC-IET portal.', 'info');
     this.showLoginView();
   }

@@ -1,0 +1,220 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'password');
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Role helpers: Bootstrapped Admin includes runtime user email with verification
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'faadaali.98@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isTeacher() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher')
+      );
+    }
+
+    // --- Entity Validation Functions ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role']) &&
+             data.keys().hasOnly(['uid', 'name', 'email', 'role', 'rollNumber', 'section', 'department', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
+             data.role in ['student', 'teacher', 'admin'] &&
+             (!('rollNumber' in data) || (data.rollNumber is string && data.rollNumber.size() <= 30)) &&
+             (!('section' in data) || (data.section is string && data.section.size() <= 20)) &&
+             (!('department' in data) || (data.department is string && data.department.size() <= 80));
+    }
+
+    function isValidSession(data) {
+      return data.keys().hasAll(['id', 'teacherId', 'teacherName', 'subjectName', 'section', 'status', 'code']) &&
+             data.keys().hasOnly(['id', 'teacherId', 'teacherName', 'subjectId', 'subjectName', 'section', 'lectureDate', 'slotTime', 'status', 'code', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.teacherId is string && data.teacherId.size() > 0 && data.teacherId.size() <= 128 &&
+             data.teacherName is string && data.teacherName.size() > 0 && data.teacherName.size() <= 100 &&
+             data.subjectName is string && data.subjectName.size() > 0 && data.subjectName.size() <= 100 &&
+             data.section is string && data.section.size() > 0 && data.section.size() <= 20 &&
+             data.status in ['active', 'closed'] &&
+             data.code is string && data.code.size() > 0 && data.code.size() <= 64;
+    }
+
+    function isValidAttendanceRecord(data) {
+      return data.keys().hasAll(['id', 'sessionId', 'studentId', 'studentRoll', 'studentName', 'status']) &&
+             data.keys().hasOnly(['id', 'sessionId', 'studentId', 'studentRoll', 'studentName', 'subjectName', 'status', 'markedVia', 'timestamp']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.sessionId is string && data.sessionId.size() > 0 && data.sessionId.size() <= 128 &&
+             data.studentId is string && data.studentId.size() > 0 && data.studentId.size() <= 128 &&
+             data.studentRoll is string && data.studentRoll.size() > 0 && data.studentRoll.size() <= 30 &&
+             data.studentName is string && data.studentName.size() > 0 && data.studentName.size() <= 100 &&
+             data.status in ['present', 'absent', 'late'] &&
+             (!('markedVia' in data) || data.markedVia in ['qr_scanner', 'manual_teacher', 'admin_override']);
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['id', 'userId', 'userName', 'action', 'details']) &&
+             data.keys().hasOnly(['id', 'userId', 'userName', 'role', 'action', 'details', 'timestamp']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.userName is string && data.userName.size() > 0 && data.userName.size() <= 100 &&
+             data.action is string && data.action.size() > 0 && data.action.size() <= 80 &&
+             data.details is string && data.details.size() <= 500;
+    }
+
+    // --- Collections ---
+
+    // 1. Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isTeacher());
+      allow list: if isSignedIn() && (isAdmin() || (resource.data.uid == request.auth.uid));
+
+      // User create: can only create their own profile, cannot self-assign admin/teacher unless bootstrapped admin
+      allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId &&
+                      isValidUser(incoming()) && incoming().uid == request.auth.uid &&
+                      (incoming().role == 'student' || isAdmin());
+
+      allow update: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (
+        isAdmin() ||
+        (
+          request.auth.uid == userId &&
+          incoming().uid == existing().uid &&
+          incoming().role == existing().role && // Cannot change role
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'section', 'department'])
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // 2. Admins Marker Collection
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() && isValidId(adminId);
+    }
+
+    // 3. Attendance Sessions
+    match /sessions/{sessionId} {
+      allow get: if isSignedIn() && isValidId(sessionId);
+      allow list: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.teacherId == request.auth.uid ||
+        resource.data.status == 'active'
+      );
+
+      allow create: if isVerified() && isValidId(sessionId) && isValidSession(incoming()) &&
+                      (incoming().teacherId == request.auth.uid || isAdmin());
+
+      // Only session creator teacher or admin can update; once closed, non-admin cannot reopen
+      allow update: if isVerified() && isValidId(sessionId) && isValidSession(incoming()) && (
+        isAdmin() ||
+        (
+          incoming().teacherId == existing().teacherId &&
+          existing().teacherId == request.auth.uid &&
+          // Cannot modify active state once closed unless admin
+          (existing().status != 'closed' || isAdmin()) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'code', 'subjectName', 'section', 'slotTime', 'lectureDate'])
+        )
+      );
+
+      allow delete: if isAdmin() && isValidId(sessionId);
+
+      // Sub-collection: session records
+      match /records/{recordId} {
+        allow get: if isSignedIn() && isValidId(recordId) && (
+          isAdmin() ||
+          resource.data.studentId == request.auth.uid ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.teacherId == request.auth.uid
+        );
+
+        allow list: if isSignedIn() && (
+          isAdmin() ||
+          resource.data.studentId == request.auth.uid ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.teacherId == request.auth.uid
+        );
+
+        // Student marking attendance: must be verified, studentId must equal auth.uid, parent session must exist and be active
+        allow create: if isVerified() && isValidId(recordId) && isValidAttendanceRecord(incoming()) &&
+                        exists(/databases/$(database)/documents/sessions/$(sessionId)) &&
+                        get(/databases/$(database)/documents/sessions/$(sessionId)).data.status == 'active' &&
+                        (incoming().studentId == request.auth.uid || isAdmin() || get(/databases/$(database)/documents/sessions/$(sessionId)).data.teacherId == request.auth.uid);
+
+        allow update: if isVerified() && isValidId(recordId) && isValidAttendanceRecord(incoming()) && (
+          isAdmin() ||
+          (
+            get(/databases/$(database)/documents/sessions/$(sessionId)).data.teacherId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'markedVia'])
+          )
+        );
+
+        allow delete: if isAdmin() && isValidId(recordId);
+      }
+    }
+
+    // 4. Global Attendance Records (Direct queryable collection for student dashboards)
+    match /attendance_records/{recordId} {
+      allow get: if isSignedIn() && isValidId(recordId) && (
+        isAdmin() || resource.data.studentId == request.auth.uid
+      );
+
+      allow list: if isSignedIn() && (
+        isAdmin() || resource.data.studentId == request.auth.uid
+      );
+
+      allow create: if isVerified() && isValidId(recordId) && isValidAttendanceRecord(incoming()) &&
+                      (incoming().studentId == request.auth.uid || isAdmin() || isTeacher());
+
+      allow update: if isVerified() && isValidId(recordId) && isValidAttendanceRecord(incoming()) && (
+        isAdmin() || (
+          isTeacher() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'markedVia'])
+        )
+      );
+
+      allow delete: if isAdmin() && isValidId(recordId);
+    }
+
+    // 5. Audit Logs
+    match /audit_logs/{logId} {
+      allow get: if isAdmin() && isValidId(logId);
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming()) &&
+                      (incoming().userId == request.auth.uid || isAdmin());
+      allow update, delete: if false; // Audit logs are immutable and cannot be deleted
+    }
+
+    // 6. Test connection collection
+    match /test/{testId} {
+      allow read, write: if true;
+    }
+  }
+}
