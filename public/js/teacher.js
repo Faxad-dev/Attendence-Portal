@@ -202,37 +202,59 @@ const TeacherPortal = {
     this.countdownInterval = setInterval(updateTimer, 1000);
   },
 
-  // 5. Real-Time SSE Live Stream Connection
+  // 5. Real-Time SSE Live Stream Connection (with Polling Fallback for Vercel)
   connectLiveStream(sessionId) {
     if (this.sseEventSource) {
       this.sseEventSource.close();
+      this.sseEventSource = null;
+    }
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
     }
 
-    this.sseEventSource = new EventSource(`/api/teacher/live-stream/${sessionId}`);
+    try {
+      this.sseEventSource = new EventSource(`/api/teacher/live-stream/${sessionId}`);
 
-    this.sseEventSource.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
+      this.sseEventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
 
-        if (payload.type === 'STUDENT_MARKED') {
-          Utils.playSuccessChime();
-          Utils.showToast(`🎯 ${payload.student.name} (${payload.student.roll_number}) marked present!`, 'success');
-          // Reload roster to reflect new live count & timestamp
-          this.loadLiveRoster(sessionId, payload.student.id);
-        } else if (payload.type === 'MANUAL_OVERRIDE') {
-          this.loadLiveRoster(sessionId);
-        } else if (payload.type === 'SESSION_CLOSED') {
-          Utils.showToast('Session has been closed.', 'info');
-          this.resetSessionUI();
+          if (payload.type === 'STUDENT_MARKED') {
+            Utils.playSuccessChime();
+            Utils.showToast(`🎯 ${payload.student.name} (${payload.student.roll_number}) marked present!`, 'success');
+            // Reload roster to reflect new live count & timestamp
+            this.loadLiveRoster(sessionId, payload.student.id);
+          } else if (payload.type === 'MANUAL_OVERRIDE') {
+            this.loadLiveRoster(sessionId);
+          } else if (payload.type === 'SESSION_CLOSED') {
+            Utils.showToast('Session has been closed.', 'info');
+            this.resetSessionUI();
+          }
+        } catch (e) {
+          console.error('SSE parse error:', e);
         }
-      } catch (e) {
-        console.error('SSE parse error:', e);
-      }
-    };
+      };
 
-    this.sseEventSource.onerror = (err) => {
-      console.warn('SSE connection closed or lost:', err);
-    };
+      this.sseEventSource.onerror = () => {
+        // Serverless (Vercel) automatically switches to polling mode
+        if (!this.pollingInterval) {
+          this.pollingInterval = setInterval(() => {
+            if (this.currentSession) {
+              this.loadLiveRoster(sessionId);
+            }
+          }, 3000);
+        }
+      };
+    } catch (e) {
+      if (!this.pollingInterval) {
+        this.pollingInterval = setInterval(() => {
+          if (this.currentSession) {
+            this.loadLiveRoster(sessionId);
+          }
+        }, 3000);
+      }
+    }
   },
 
   // 6. Load Live Attendance Roster
