@@ -1,0 +1,6 @@
+{
+  "name": "NFC-IET QR Attendance Portal",
+  "description": "Multi-portal QR-based attendance management system for NFC Institute of Engineering and Technology (NFC-IET) students, teachers, and administration.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

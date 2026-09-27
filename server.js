@@ -318,23 +318,6 @@ app.get('/api/student/daily-schedule', authenticate, requireRole('student'), (re
   });
 });
 
-// Get active session for student's section
-app.get('/api/student/active-session', authenticate, requireRole('student'), (req, res) => {
-  const student = req.user;
-  const todayDate = getTodayDateStr();
-  const session = db.prepare(`
-    SELECT qs.*, sub.name as subject_name, sub.code as subject_code, u.name as teacher_name
-    FROM qr_sessions qs
-    JOIN subjects sub ON qs.subject_id = sub.id
-    JOIN users u ON qs.teacher_id = u.id
-    WHERE qs.section_id = ? AND qs.date = ? AND qs.is_active = 1 AND datetime(qs.expires_at) > datetime('now')
-    ORDER BY qs.created_at DESC
-    LIMIT 1
-  `).get(student.section_id, todayDate);
-
-  res.json({ session: session || null });
-});
-
 // Student Scan QR Token
 app.post('/api/student/scan-qr', authenticate, requireRole('student'), (req, res) => {
   const student = req.user;
