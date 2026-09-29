@@ -159,6 +159,12 @@ function initDatabase() {
     );
   `);
 
+  try {
+    db.exec("ALTER TABLE attendance_records ADD COLUMN reason TEXT");
+  } catch (e) {
+    // Column already exists or already migrated
+  }
+
   // Check if initial seeding is needed
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
   if (userCount === 0) {

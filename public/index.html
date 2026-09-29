@@ -11,6 +11,9 @@
   <link rel="icon" type="image/svg+xml" href="assets/nfc-iet-logo.svg">
   <!-- HTML5-QRCode Scanner Library -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- jsPDF and AutoTable for Formatted PDF Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <!-- Firebase Service -->
   <script type="module" src="js/firebase-service.js"></script>
 </head>
@@ -361,6 +364,17 @@
                 <span class="stat-chip-label" style="color: var(--text-secondary);" id="live-count-pct">0% Present</span>
               </div>
 
+              <button id="btn-export-session-pdf" class="btn-primary" style="background: #7F1D1D; border-color: #991B1B; display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; font-weight: 600; font-size: 0.85rem;" title="Download institutional formatted PDF attendance sheet">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <span>Export PDF</span>
+              </button>
+
               <button id="btn-export-session-csv" class="btn-success">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -380,7 +394,7 @@
                   <th>Student Name</th>
                   <th>Status</th>
                   <th>Scan Time</th>
-                  <th>Method</th>
+                  <th>Method &amp; Reason</th>
                   <th>Manual Override</th>
                 </tr>
               </thead>
@@ -773,6 +787,70 @@
         </div>
 
         <button id="btn-run-bulk-import" class="btn-primary">Execute Bulk Student Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL 6: MANUAL ATTENDANCE OVERRIDE (TEACHER)
+       ========================================================================== -->
+  <div id="modal-manual-override" class="modal-backdrop">
+    <div class="modal-window" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3>✏️ Manual Attendance Override</h3>
+        <button class="btn-close-modal" aria-label="Close Modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="override-student-id">
+        <input type="hidden" id="override-student-roll">
+        <input type="hidden" id="override-student-name">
+
+        <div style="background: #F8FAFC; border: 1px solid var(--border-light); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+          <div style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem;" id="override-student-display-name">Student Name</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+            Roll No: <span id="override-student-display-roll" style="font-weight: 600; color: var(--primary-maroon);">22-CS-325</span> • 
+            Current: <span id="override-student-current-status" class="status-tag absent">Absent</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" style="font-weight: 600;">New Attendance Status</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <button type="button" id="btn-toggle-present" class="btn-secondary status-toggle-btn" style="padding: 10px; font-weight: 700; text-align: center; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;">
+              ✅ Present
+            </button>
+            <button type="button" id="btn-toggle-absent" class="btn-secondary status-toggle-btn" style="padding: 10px; font-weight: 700; text-align: center; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;">
+              ❌ Absent
+            </button>
+          </div>
+          <input type="hidden" id="override-target-status" value="present">
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label class="form-label" for="override-reason-input" style="font-weight: 600;">
+            Reason Comment <span style="font-weight: normal; color: var(--text-secondary); font-size: 0.8rem;">(Persisted to Firestore &amp; Audit Log)</span>
+          </label>
+          <input type="text" id="override-reason-input" class="form-control" placeholder="e.g., Medical leave, Scanner device glitch, Late arrival" maxlength="300" required>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; font-weight: 600;">Quick Reason Tags:</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;" id="override-quick-tags">
+            <button type="button" class="btn-secondary override-tag-btn" style="padding: 3px 8px; font-size: 0.72rem; border-radius: 12px;">🏥 Medical Leave</button>
+            <button type="button" class="btn-secondary override-tag-btn" style="padding: 3px 8px; font-size: 0.72rem; border-radius: 12px;">📱 Device / QR Glitch</button>
+            <button type="button" class="btn-secondary override-tag-btn" style="padding: 3px 8px; font-size: 0.72rem; border-radius: 12px;">⏱️ Late with Permission</button>
+            <button type="button" class="btn-secondary override-tag-btn" style="padding: 3px 8px; font-size: 0.72rem; border-radius: 12px;">🏃 Left Classroom Early</button>
+            <button type="button" class="btn-secondary override-tag-btn" style="padding: 3px 8px; font-size: 0.72rem; border-radius: 12px;">⚠️ Proxy Detected</button>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button type="button" class="btn-secondary btn-close-modal" style="padding: 8px 16px;">Cancel</button>
+          <button type="button" id="btn-save-attendance-override" class="btn-primary" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; font-weight: 600;">
+            <span>Save &amp; Sync to Firestore</span>
+            <span style="font-size: 0.9rem;">🔥</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

@@ -48,6 +48,7 @@
         "subjectName": { "type": "string", "maxLength": 100, "description": "Academic course subject" },
         "status": { "type": "string", "enum": ["present", "absent", "late"], "description": "Attendance status" },
         "markedVia": { "type": "string", "enum": ["qr_scanner", "manual_teacher", "admin_override"], "description": "Method of attendance entry" },
+        "reason": { "type": "string", "maxLength": 300, "description": "Manual override reason comment" },
         "timestamp": { "type": "string", "description": "Server timestamp of marked attendance" }
       },
       "required": ["id", "sessionId", "studentId", "studentRoll", "studentName", "status"]

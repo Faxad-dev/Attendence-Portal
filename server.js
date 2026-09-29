@@ -841,6 +841,7 @@ app.get('/api/teacher/live-attendance/:sessionId', authenticate, requireRole('te
       is_marked: !!record && record.status === 'present',
       status: record ? record.status : 'absent',
       method: record ? record.method : 'none',
+      reason: record ? record.reason : null,
       marked_at: record ? record.timestamp : null
     };
   });
@@ -859,10 +860,10 @@ app.get('/api/teacher/live-attendance/:sessionId', authenticate, requireRole('te
   });
 });
 
-// Manual Attendance Override (Mark / Unmark / Excuse)
+// Manual Attendance Override (Mark / Unmark / Excuse with Reason)
 app.post('/api/teacher/manual-override', authenticate, requireRole('teacher', 'admin'), (req, res) => {
   const teacher = req.user;
-  const { session_id, student_id, subject_id, section_id, slot_id, date, status } = req.body;
+  const { session_id, student_id, subject_id, section_id, slot_id, date, status, reason } = req.body;
 
   if (!student_id || !subject_id || !section_id || !slot_id || !date || !status) {
     return res.status(400).json({ error: 'Missing required parameters for manual override.' });
@@ -876,25 +877,36 @@ app.post('/api/teacher/manual-override', authenticate, requireRole('teacher', 'a
     WHERE student_id = ? AND subject_id = ? AND date = ? AND slot_id = ?
   `).get(student_id, subject_id, date, slot_id);
 
+  const cleanReason = (reason && String(reason).trim()) ? String(reason).trim().substring(0, 300) : (status === 'absent' ? 'Manual override: marked absent' : 'Manual override by instructor');
+
   if (status === 'absent') {
-    // Delete attendance record
-    if (existing) {
-      db.prepare('DELETE FROM attendance_records WHERE id = ?').run(existing.id);
-    }
-  } else {
-    // Upsert attendance record
     if (existing) {
       db.prepare(`
         UPDATE attendance_records
-        SET status = ?, method = 'manual_override', marked_by = ?, timestamp = datetime('now', 'localtime')
+        SET status = 'absent', method = 'manual_override', reason = ?, marked_by = ?, timestamp = datetime('now', 'localtime')
         WHERE id = ?
-      `).run(status, teacher.id, existing.id);
+      `).run(cleanReason, teacher.id, existing.id);
     } else {
       db.prepare(`
         INSERT INTO attendance_records (
-          qr_session_id, student_id, subject_id, section_id, slot_id, date, timestamp, method, status, marked_by
-        ) VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), 'manual_override', ?, ?)
-      `).run(session_id || null, student_id, subject_id, section_id, slot_id, date, status, teacher.id);
+          qr_session_id, student_id, subject_id, section_id, slot_id, date, timestamp, method, status, reason, marked_by
+        ) VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), 'manual_override', 'absent', ?, ?)
+      `).run(session_id || null, student_id, subject_id, section_id, slot_id, date, cleanReason, teacher.id);
+    }
+  } else {
+    // status is 'present' (or 'late'/'excused')
+    if (existing) {
+      db.prepare(`
+        UPDATE attendance_records
+        SET status = ?, method = 'manual_override', reason = ?, marked_by = ?, timestamp = datetime('now', 'localtime')
+        WHERE id = ?
+      `).run(status, cleanReason, teacher.id, existing.id);
+    } else {
+      db.prepare(`
+        INSERT INTO attendance_records (
+          qr_session_id, student_id, subject_id, section_id, slot_id, date, timestamp, method, status, reason, marked_by
+        ) VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), 'manual_override', ?, ?, ?)
+      `).run(session_id || null, student_id, subject_id, section_id, slot_id, date, status, cleanReason, teacher.id);
     }
   }
 
@@ -903,7 +915,7 @@ app.post('/api/teacher/manual-override', authenticate, requireRole('teacher', 'a
     teacher.name,
     teacher.role,
     'MANUAL_ATTENDANCE_OVERRIDE',
-    `Manual override: Marked ${student.name} (${student.roll_number}) as ${status.toUpperCase()} for Subject #${subject_id}`,
+    `Manual override: Marked ${student.name} (${student.roll_number}) as ${status.toUpperCase()} for Subject #${subject_id} [Reason: ${cleanReason}]`,
     req
   );
 
@@ -912,13 +924,22 @@ app.post('/api/teacher/manual-override', authenticate, requireRole('teacher', 'a
     notifyLiveSession(session_id, {
       type: 'MANUAL_OVERRIDE',
       student_id,
-      status
+      status,
+      reason: cleanReason
     });
   }
 
   res.json({
     success: true,
-    message: `Attendance updated to ${status} for ${student.name}.`
+    message: `Attendance updated to ${status} for ${student.name}.`,
+    record: {
+      student_id: student.id,
+      student_name: student.name,
+      student_roll: student.roll_number,
+      status,
+      reason: cleanReason,
+      session_id
+    }
   });
 });
 
@@ -1083,6 +1104,133 @@ app.get('/api/teacher/export-csv', authenticate, requireRole('teacher', 'admin')
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', `attachment; filename="${title}.csv"`);
   res.send(csvContent);
+});
+
+// Formatted PDF / Printable Export for Teacher
+app.get('/api/teacher/export-pdf', authenticate, requireRole('teacher', 'admin'), (req, res) => {
+  const { session_id } = req.query;
+  if (!session_id) {
+    return res.status(400).send('Session ID is required for PDF export.');
+  }
+
+  const session = db.prepare(`
+    SELECT qs.*, sub.name as subject_name, sub.code as subject_code,
+           sec.name as section_name, ls.label as slot_label, u.name as teacher_name
+    FROM qr_sessions qs
+    JOIN subjects sub ON qs.subject_id = sub.id
+    JOIN sections sec ON qs.section_id = sec.id
+    JOIN lecture_slots ls ON qs.slot_id = ls.id
+    JOIN users u ON qs.teacher_id = u.id
+    WHERE qs.id = ?
+  `).get(session_id);
+
+  if (!session) {
+    return res.status(404).send('Attendance Session not found.');
+  }
+
+  const students = db.prepare(`
+    SELECT u.id, u.roll_number, u.name, u.email,
+           ar.status, ar.timestamp, ar.method
+    FROM users u
+    LEFT JOIN attendance_records ar ON ar.student_id = u.id AND ar.subject_id = ? AND ar.date = ? AND ar.slot_id = ?
+    WHERE u.section_id = ? AND u.role = 'student' AND u.status = 'active'
+    ORDER BY u.roll_number ASC
+  `).all(session.subject_id, session.date, session.slot_id, session.section_id);
+
+  const total = students.length;
+  const present = students.filter(s => s.status === 'present').length;
+  const absent = total - present;
+  const rate = total > 0 ? ((present / total) * 100).toFixed(1) : 0;
+
+  const rows = students.map((s, idx) => `
+    <tr>
+      <td style="text-align: center;">${idx + 1}</td>
+      <td style="text-align: center; font-weight: bold;">${s.roll_number}</td>
+      <td>${s.name}</td>
+      <td style="text-align: center;">
+        <span style="padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; ${s.status === 'present' ? 'background:#D1FAE5; color:#065F46;' : 'background:#FEE2E2; color:#991B1B;'}">
+          ${s.status === 'present' ? 'PRESENT' : 'ABSENT'}
+        </span>
+      </td>
+      <td style="text-align: center;">${s.timestamp ? (s.timestamp.split(' ')[1] || s.timestamp) : '—'}</td>
+      <td style="text-align: center; font-size: 10px; text-transform: uppercase;">${s.method || '—'}</td>
+    </tr>
+  `).join('');
+
+  const html = `<!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8">
+    <title>NFC-IET Attendance Sheet - ${session.subject_code}</title>
+    <style>
+      @page { size: A4 portrait; margin: 12mm; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #1E293B; margin: 0; padding: 12px; }
+      .header { background: #7F1D1D; color: #ffffff; padding: 14px 20px; border-radius: 6px; text-align: center; }
+      .header h1 { margin: 0 0 4px; font-size: 16px; letter-spacing: 0.5px; }
+      .header p { margin: 0; font-size: 11px; opacity: 0.9; }
+      .title-row { display: flex; justify-content: space-between; align-items: baseline; margin: 14px 0 10px; }
+      .meta { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 10px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px; margin-bottom: 12px; }
+      .stats { display: flex; gap: 8px; margin-bottom: 14px; }
+      .stat-chip { flex: 1; border: 1px solid #E2E8F0; border-radius: 6px; padding: 6px; text-align: center; }
+      .stat-val { font-size: 13px; font-weight: bold; }
+      .stat-lbl { font-size: 9px; color: #64748B; text-transform: uppercase; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th { background: #7F1D1D; color: #fff; padding: 6px 8px; text-align: left; }
+      td { padding: 6px 8px; border-bottom: 1px solid #E2E8F0; }
+      .sig-row { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 20px; }
+      .sig-box { width: 220px; text-align: center; border-top: 1px solid #94A3B8; padding-top: 6px; font-size: 10px; }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>NFC INSTITUTE OF ENGINEERING & TECHNOLOGY, MULTAN</h1>
+      <p>Department of Computer Science • Official QR Attendance Management System</p>
+    </div>
+    <div class="title-row">
+      <strong style="color: #7F1D1D; font-size: 13px;">OFFICIAL LECTURE ATTENDANCE ROSTER</strong>
+      <span style="font-size: 10px; color: #64748B;">Date: ${session.date} | ${session.slot_label}</span>
+    </div>
+    <div class="meta">
+      <div><strong>Subject:</strong> ${session.subject_name} (${session.subject_code})</div>
+      <div><strong>Section:</strong> ${session.section_name}</div>
+      <div><strong>Instructor:</strong> ${session.teacher_name}</div>
+      <div><strong>Session ID:</strong> #${session.id}</div>
+    </div>
+    <div class="stats">
+      <div class="stat-chip" style="background:#F1F5F9;"><div class="stat-val">${total}</div><div class="stat-lbl">Enrolled</div></div>
+      <div class="stat-chip" style="background:#D1FAE5; color:#065F46;"><div class="stat-val">${present}</div><div class="stat-lbl">Present</div></div>
+      <div class="stat-chip" style="background:#FEE2E2; color:#991B1B;"><div class="stat-val">${absent}</div><div class="stat-lbl">Absent</div></div>
+      <div class="stat-chip" style="background:#FEF3C7; color:#854D0E;"><div class="stat-val">${rate}%</div><div class="stat-lbl">Attendance Rate</div></div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align: center; width: 30px;">#</th>
+          <th style="text-align: center; width: 85px;">Roll No</th>
+          <th>Student Name</th>
+          <th style="text-align: center; width: 80px;">Status</th>
+          <th style="text-align: center; width: 80px;">Time Marked</th>
+          <th style="text-align: center; width: 85px;">Verification</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="sig-row">
+      <div class="sig-box">
+        <strong>Course Instructor Signature</strong><br>
+        <span>${session.teacher_name}</span>
+      </div>
+      <div class="sig-box">
+        <strong>HOD / Registrar Seal</strong><br>
+        <span>NFC-IET Quality Assurance</span>
+      </div>
+    </div>
+    <script>window.onload = function() { window.print(); };</script>
+  </body>
+  </html>`;
+
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
 });
 
 // ==========================================

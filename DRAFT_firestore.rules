@@ -72,14 +72,15 @@ service cloud.firestore {
 
     function isValidAttendanceRecord(data) {
       return data.keys().hasAll(['id', 'sessionId', 'studentId', 'studentRoll', 'studentName', 'status']) &&
-             data.keys().hasOnly(['id', 'sessionId', 'studentId', 'studentRoll', 'studentName', 'subjectName', 'status', 'markedVia', 'timestamp']) &&
+             data.keys().hasOnly(['id', 'sessionId', 'studentId', 'studentRoll', 'studentName', 'subjectName', 'status', 'markedVia', 'reason', 'timestamp']) &&
              data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
              data.sessionId is string && data.sessionId.size() > 0 && data.sessionId.size() <= 128 &&
              data.studentId is string && data.studentId.size() > 0 && data.studentId.size() <= 128 &&
              data.studentRoll is string && data.studentRoll.size() > 0 && data.studentRoll.size() <= 30 &&
              data.studentName is string && data.studentName.size() > 0 && data.studentName.size() <= 100 &&
              data.status in ['present', 'absent', 'late'] &&
-             (!('markedVia' in data) || data.markedVia in ['qr_scanner', 'manual_teacher', 'admin_override']);
+             (!('markedVia' in data) || data.markedVia in ['qr_scanner', 'manual_teacher', 'admin_override']) &&
+             (!('reason' in data) || (data.reason is string && data.reason.size() <= 300));
     }
 
     function isValidAuditLog(data) {
@@ -141,7 +142,6 @@ service cloud.firestore {
         (
           incoming().teacherId == existing().teacherId &&
           existing().teacherId == request.auth.uid &&
-          // Cannot modify active state once closed unless admin
           (existing().status != 'closed' || isAdmin()) &&
           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'code', 'subjectName', 'section', 'slotTime', 'lectureDate'])
         )
@@ -173,7 +173,7 @@ service cloud.firestore {
           isAdmin() ||
           (
             get(/databases/$(database)/documents/sessions/$(sessionId)).data.teacherId == request.auth.uid &&
-            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'markedVia'])
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'markedVia', 'reason'])
           )
         );
 
@@ -196,7 +196,7 @@ service cloud.firestore {
 
       allow update: if isVerified() && isValidId(recordId) && isValidAttendanceRecord(incoming()) && (
         isAdmin() || (
-          isTeacher() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'markedVia'])
+          isTeacher() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'markedVia', 'reason'])
         )
       );
 

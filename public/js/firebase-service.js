@@ -237,9 +237,48 @@ export async function syncSessionToFirestore(sessionData) {
       status: 'active',
       createdAt: new Date().toISOString()
     }, { merge: true });
-    console.log('Lecture session synced to Firestore:', sessionId);
+// Sync Manual Override to Firestore
+export async function syncOverrideToFirestore(sessionDetails, overrideDetails) {
+  if (!db || !isFirebaseReady) return null;
+  const path = 'attendance_records';
+  try {
+    const sessId = String(sessionDetails.id || sessionDetails.session_id || 'sess_1');
+    const stdId = String(overrideDetails.student_id || overrideDetails.id || 'std_1');
+    const recordId = `rec_sess_${sessId}_std_${stdId}`;
+    const payload = {
+      id: recordId,
+      sessionId: sessId,
+      studentId: stdId,
+      studentRoll: String(overrideDetails.student_roll || overrideDetails.roll_number || 'N/A'),
+      studentName: String(overrideDetails.student_name || overrideDetails.name || 'Student'),
+      subjectName: String(sessionDetails.subject_name || sessionDetails.subjectName || 'Course'),
+      status: overrideDetails.status === 'present' ? 'present' : 'absent',
+      markedVia: 'manual_teacher',
+      reason: String(overrideDetails.reason || 'Instructor manual toggle').substring(0, 300),
+      timestamp: new Date().toISOString()
+    };
+    
+    // Save in global queryable collection
+    await setDoc(doc(db, path, recordId), payload, { merge: true });
+    
+    // Also save in subcollection under session
+    try {
+      const sessionSubcollectionRef = doc(db, 'sessions', sessId, 'records', recordId);
+      await setDoc(sessionSubcollectionRef, payload, { merge: true });
+    } catch (subErr) {
+      // Subcollection optional if session parent isn't yet committed
+    }
+
+    console.log('✅ Manual override persisted to Firestore successfully:', recordId, payload);
+    return recordId;
   } catch (err) {
-    console.warn('Firestore session sync note:', err.message);
+    console.error('Firestore manual override sync warning:', err.message);
+    try {
+      handleFirestoreError(err, OperationType.WRITE, `attendance_records`);
+    } catch (e) {
+      // logged
+    }
+    return null;
   }
 }
 
@@ -251,6 +290,8 @@ window.FirebaseService = {
   signOutFirebase,
   syncAttendanceToFirestore,
   syncSessionToFirestore,
+  syncOverrideToFirestore,
   handleFirestoreError,
   OperationType
 };
+
